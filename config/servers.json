@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Rom",
+    "host": "192.168.0.80"
+  },
+  {
+    "name": "SKD",
+    "host": "192.168.0.90",
+    "username": "skd",
+    "password": "password"
+  },
+  {
+    "name": "tnk-s01-04",
+    "host": "10.200.0.10"
+  },
+  {
+    "name": "tnk-s01-08",
+    "host": "10.200.0.222",
+    "services": ["MSSQLSERVER"]
+  },
+  {
+    "name": "tnk-s01-09",
+    "host": "10.200.0.239",
+    "services": ["W3SVC", "WAS"]
+  },
+  {
+    "name": "tnk-s01-10",
+    "host": "10.200.0.231",
+    "services": ["MSSQLSERVER"]
+  },
+  {
+    "name": "ZhaksyNeftebaza",
+    "host": "192.168.69.254",
+    "username": "rlufe",
+    "password": "password"
+  }
+]
