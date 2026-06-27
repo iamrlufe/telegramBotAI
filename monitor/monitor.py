@@ -27,8 +27,9 @@ from alerts import (
 
 INTERVAL = 300
 PING_INTERVAL = 30
-RETRY_DELAY = 60   # пауза перед повторной попыткой (сек)
-RETRY_COUNT = 2    # количество попыток перед алертом офлайн
+RETRY_DELAY = 60       # пауза перед повторной попыткой WinRM (сек)
+RETRY_COUNT = 2        # количество попыток WinRM перед алертом офлайн
+PING_FAIL_THRESHOLD = 15  # сколько подряд неудачных пингов = сервер упал
 SERVERS_FILE = "/app/config/servers.json"
 
 DISK_STATE_FILE = "/app/data/disk_alert_state.json"
@@ -39,6 +40,11 @@ CPU_STATE_FILE = "/app/data/cpu_alert_state.json"
 RAM_STATE_FILE = "/app/data/ram_alert_state.json"
 
 RETAIN_DAYS = 30
+
+# Счётчики неудачных пингов — хранятся в памяти
+# { server_name: int }
+_ping_fail_counts: dict = {}
+_ping_lock = threading.Lock()
 
 
 def ping_host(host: str) -> bool:
@@ -77,10 +83,6 @@ def parse_status(error_text: str) -> str:
 
 
 def try_check_server(server: dict) -> dict:
-    """
-    Пытается опросить сервер RETRY_COUNT раз с паузой RETRY_DELAY сек.
-    Возвращает результат или бросает последнее исключение.
-    """
     name = server["name"]
     last_error = None
 
@@ -134,17 +136,33 @@ def run_ping_cycle():
         host = server["host"]
         is_alive = ping_host(host)
 
-        if not is_alive:
-            print(f"[ping] DOWN {name} ({host})", flush=True)
-            save_server_status(name, "ping_down", error="Ping не отвечает")
-            alert_server_down(server)
-            continue
+        with _ping_lock:
+            if is_alive:
+                was_down = _ping_fail_counts.get(name, 0) >= PING_FAIL_THRESHOLD
+                _ping_fail_counts[name] = 0
 
-        latest_status = get_latest_server_status(name)
-        if latest_status == "ping_down":
-            print(f"[ping] UP {name} ({host})", flush=True)
-            save_server_status(name, "online", error="Ping восстановлен")
-            alert_server_online(server)
+                if was_down:
+                    # Сервер восстановился — снимаем статус ping_down
+                    print(f"[ping] ВОССТАНОВЛЕН {name} ({host})", flush=True)
+                    save_server_status(name, "online", error="Ping восстановлен")
+                    alert_server_online(server)
+            else:
+                count = _ping_fail_counts.get(name, 0) + 1
+                _ping_fail_counts[name] = count
+                print(
+                    f"[ping] НЕТ ОТВЕТА {name} ({host}) — "
+                    f"{count}/{PING_FAIL_THRESHOLD}",
+                    flush=True
+                )
+
+                if count == PING_FAIL_THRESHOLD:
+                    # Только сейчас фиксируем падение
+                    print(f"[ping] DOWN {name} ({host}) — порог достигнут", flush=True)
+                    save_server_status(name, "ping_down", error="Ping не отвечает")
+                    alert_server_down(server)
+                elif count > PING_FAIL_THRESHOLD:
+                    # Уже зафиксировано — просто логируем, не спамим
+                    print(f"[ping] Всё ещё недоступен {name} ({host})", flush=True)
 
 
 def ping_loop():
@@ -174,9 +192,8 @@ def run_cycle():
 
         try:
             if not ping_host(host):
-                print(f"[monitor] СЕРВЕР УПАЛ {name}: ping_down", flush=True)
-                save_server_status(name, "ping_down", error="Ping не отвечает")
-                alert_server_down(server)
+                # В основном цикле просто логируем — алерт идёт из ping_loop
+                print(f"[monitor] Пинг не прошёл {name}, пропускаю WinRM", flush=True)
                 continue
 
             info = try_check_server(server)
@@ -232,7 +249,7 @@ def run_cycle():
 def main():
     print("[monitor] AgentMonitor запущен", flush=True)
     print(f"[monitor] Интервал: {INTERVAL} сек, retry: {RETRY_COUNT}x{RETRY_DELAY}сек", flush=True)
-    print(f"[monitor] Ping-мониторинг: каждые {PING_INTERVAL} сек", flush=True)
+    print(f"[monitor] Ping-мониторинг: каждые {PING_INTERVAL} сек, порог: {PING_FAIL_THRESHOLD} неудач", flush=True)
     print(f"[monitor] Хранение данных: {RETAIN_DAYS} дней", flush=True)
 
     os.makedirs("/app/data", exist_ok=True)
