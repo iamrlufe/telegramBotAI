@@ -15,10 +15,11 @@ from telegram.ext import (
     filters
 )
 
-from charts import build_server_chart
+from charts  import build_server_chart
 from db import get_servers_status, get_server_detail, get_problems, build_report
 from ping_tools import load_targets, ping_custom, ping_target
 from refresh import refresh_server
+from backup_bot import cmd_backup_menu, backup_callback
 
 ALLOWED_USER_ID = int(os.getenv("TELEGRAM_ALLOWED_USER_ID"))
 _group_env = os.getenv("TELEGRAM_GROUP_ID")
@@ -31,7 +32,8 @@ KEYBOARD = [
     ["🖥 Серверы"],
     ["📡 Пинг"],
     ["📋 Отчёт"],
-    ["🚨 Проблемы"]
+    ["🚨 Проблемы"],
+    ["💾 Бэкапы"],
 ]
 
 
@@ -212,6 +214,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_report(update, context)
     elif text == "🚨 Проблемы":
         await cmd_problems(update, context)
+    elif text == "💾 Бэкапы":
+        await cmd_backup_menu(update, context)
 
 
 # ─── Инлайн кнопки — детали сервера ─────────────────────────
@@ -232,7 +236,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
         return
 
-    if query.data.startswith("server:"):
+    if query.data.startswith("backup_"):
+        await backup_callback(query, context)
+
+    elif query.data.startswith("server:"):
         server_name = query.data.split(":", 1)[1]
         text = get_server_detail(server_name)
         keyboard = InlineKeyboardMarkup([

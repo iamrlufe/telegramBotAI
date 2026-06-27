@@ -6,6 +6,7 @@ import threading
 from datetime import datetime, timezone
 
 from check_disks import check_server
+from backup_collector import run_backup_cycle
 from db import (
     save_disk_metric,
     save_server_status,
@@ -244,6 +245,9 @@ def run_cycle():
             alert_server_offline(server, error_str)
 
     print("[monitor] Цикл завершён\n", flush=True)
+
+    # Сбор метрик бэкапов
+    run_backup_cycle()
 
 
 def main():
