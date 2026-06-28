@@ -47,15 +47,28 @@ def fmt_date(dt) -> str:
 def fmt_age(dt) -> str:
     if not dt:
         return "?"
-    now = datetime.now()
-    if hasattr(dt, "replace"):
+
+    if isinstance(dt, str):
+        try:
+            dt = datetime.strptime(dt, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return "?"
+
+    if getattr(dt, "tzinfo", None):
         dt = dt.replace(tzinfo=None)
-    delta = now - dt
+
+    delta = datetime.now() - dt
+
     days = delta.days
-    hours = int(delta.total_seconds() // 3600)
     if days >= 1:
         return f"{days} дн назад"
-    return f"{hours} ч назад"
+
+    hours = int(delta.total_seconds() // 3600)
+    if hours >= 1:
+        return f"{hours} ч назад"
+
+    minutes = int(delta.total_seconds() // 60)
+    return f"{minutes} мин назад"
 
 
 def back_kb():
